@@ -44,6 +44,7 @@ const handleSubmit = async () => {
     // ¡ÉXITO! Guardamos el Token en el almacenamiento del navegador
     localStorage.setItem('viajes_token', data.token)
     localStorage.setItem('agente_nombre', data.agente.name)
+    localStorage.setItem('agente_id', data.agente.id)
 
     // Avisamos a la página principal de que todo ha ido bien
     emit('login-success', data.agente)
