@@ -3,7 +3,8 @@ defineProps({
   itinerary: { type: Object, required: true }
 })
 // NUEVO: Le decimos a Vue que esta tarjeta puede emitir un evento
-defineEmits(['add-flight'])
+// Añadimos 'edit-itinerary' y 'delete-itinerary' a la lista de eventos
+defineEmits(['add-flight', 'edit-itinerary', 'delete-itinerary'])
 // Función helper para poner las fechas bonitas (ej: "15 oct 2026, 15:30")
 const formatDate = (dateString) => {
   const options = { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit' }
@@ -15,10 +16,17 @@ const formatDate = (dateString) => {
   <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
     
     <div class="bg-blue-50 px-6 py-4 border-b border-blue-100 flex justify-between items-center">
-      <h3 class="text-lg font-bold text-blue-900">🗺️ {{ itinerary.name }}</h3>
-      <span class="px-3 py-1 bg-blue-200 text-blue-800 text-xs font-bold rounded-full uppercase tracking-wider">
-        {{ itinerary.status }}
-      </span>
+      <div class="flex items-center gap-3">
+        <h3 class="text-lg font-bold text-blue-900">🗺️ {{ itinerary.name }}</h3>
+        <span class="px-3 py-1 bg-blue-200 text-blue-800 text-xs font-bold rounded-full uppercase tracking-wider">
+          {{ itinerary.status }}
+        </span>
+      </div>
+      
+      <div class="flex gap-3">
+        <button @click="$emit('edit-itinerary', itinerary)" class="text-lg hover:scale-110 transition-transform" title="Editar Viaje">✏️</button>
+        <button @click="$emit('delete-itinerary', itinerary.id)" class="text-lg hover:scale-110 transition-transform" title="Borrar Viaje">🗑️</button>
+      </div>
     </div>
 
     <div class="p-6">

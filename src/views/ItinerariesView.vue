@@ -17,6 +17,7 @@ const isLoading = ref(true)
 const isTripModalOpen = ref(false)
 const newTripName = ref('')
 const isCreatingTrip = ref(false)
+const editingTripId = ref(null)
 
 // NUEVO: Variables para el Modal de Vuelos
 const isFlightModalOpen = ref(false)
@@ -40,23 +41,69 @@ const fetchItineraries = async () => {
   }
 }
 
-const createNewItinerary = async () => {
+// Función inteligente: Crea o Actualiza dependiendo de si hay un ID guardado
+const saveItinerary = async () => {
   if (!newTripName.value.trim()) return 
   isCreatingTrip.value = true
+
+  // Si tenemos un ID, la URL es la de edición (PUT), si no, la de creación (POST)
+  const url = editingTripId.value 
+    ? `http://localhost:3000/api/itinerarios/${editingTripId.value}`
+    : 'http://localhost:3000/api/itinerarios'
+    
+  const method = editingTripId.value ? 'PUT' : 'POST'
+
   try {
-    const response = await fetch('http://localhost:3000/api/itinerarios', {
-      method: 'POST',
+    const response = await fetch(url, {
+      method: method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newTripName.value, clientId: clientId })
     })
-    if (!response.ok) throw new Error('Error al crear el viaje')
+    
+    if (!response.ok) throw new Error('Error al guardar el viaje')
+    
+    // Limpieza
     newTripName.value = ''
+    editingTripId.value = null
     isTripModalOpen.value = false
-    fetchItineraries()
+    fetchItineraries() // Recargamos la lista
   } catch (error) {
     console.error(error)
   } finally {
     isCreatingTrip.value = false
+  }
+}
+
+// Función para abrir el modal en modo Edición
+const openEditModal = (itinerary) => {
+  editingTripId.value = itinerary.id
+  newTripName.value = itinerary.name // Rellenamos el input con el nombre actual
+  isTripModalOpen.value = true
+}
+
+// Función para abrir el modal en modo Creación (limpia todo por si acaso)
+const openCreateModal = () => {
+  editingTripId.value = null
+  newTripName.value = ''
+  isTripModalOpen.value = true
+}
+
+// Función para Eliminar un viaje
+const deleteItinerary = async (id) => {
+  // Pedimos confirmación antes de borrar (buena práctica UX)
+  if (!window.confirm('¿Estás seguro de que quieres borrar este viaje y todos sus vuelos? Esta acción no se puede deshacer.')) {
+    return
+  }
+
+  try {
+    const response = await fetch(`http://localhost:3000/api/itinerarios/${id}`, {
+      method: 'DELETE'
+    })
+    
+    if (!response.ok) throw new Error('Error al borrar')
+    fetchItineraries() // Recargamos la lista tras borrar
+  } catch (error) {
+    console.error("Error al borrar:", error)
   }
 }
 
@@ -107,7 +154,7 @@ onMounted(() => fetchItineraries())
     <main class="flex-grow max-w-4xl mx-auto w-full p-6 mt-4">
       <div class="flex justify-between items-center mb-8">
         <h2 class="text-2xl font-bold text-slate-800">Viajes Programados</h2>
-        <BaseButton @click="isTripModalOpen = true">+ Nuevo Viaje</BaseButton>
+        <BaseButton @click="openCreateModal">+ Nuevo Viaje</BaseButton>
       </div>
 
       <div v-if="isLoading" class="text-center py-12">
@@ -119,7 +166,7 @@ onMounted(() => fetchItineraries())
           v-for="itinerary in itineraries" 
           :key="itinerary.id" 
           :itinerary="itinerary" 
-          @add-flight="openFlightModal"
+          @add-flight="openFlightModal" @edit-itinerary="openEditModal"    @delete-itinerary="deleteItinerary"
         />
       </div>
 
@@ -127,16 +174,22 @@ onMounted(() => fetchItineraries())
         <span class="text-4xl mb-3 block">🏝️</span>
         <h3 class="text-lg font-bold text-slate-700">Sin viajes a la vista</h3>
         <p class="text-slate-500 mb-4">Este cliente aún no tiene ningún itinerario creado.</p>
-        <BaseButton @click="isTripModalOpen = true">Crear mi primer viaje</BaseButton>
+        <BaseButton @click="openCreateModal">Crear mi primer viaje</BaseButton>
       </div>
     </main>
 
-    <BaseModal :isOpen="isTripModalOpen" title="Crear Nuevo Viaje" @close="isTripModalOpen = false">
-      <form @submit.prevent="createNewItinerary" class="space-y-4">
+    <BaseModal 
+      :isOpen="isTripModalOpen" 
+      :title="editingTripId ? 'Editar Viaje' : 'Crear Nuevo Viaje'" 
+      @close="isTripModalOpen = false"
+    >
+      <form @submit.prevent="saveItinerary" class="space-y-4">
         <BaseInput v-model="newTripName" label="Nombre del Itinerario" required />
         <div class="flex justify-end gap-3 mt-6">
           <BaseButton type="button" variant="secondary" @click="isTripModalOpen = false">Cancelar</BaseButton>
-          <BaseButton type="submit" :disabled="isCreatingTrip">{{ isCreatingTrip ? 'Guardando...' : 'Crear Viaje' }}</BaseButton>
+          <BaseButton type="submit" :disabled="isCreatingTrip">
+            {{ isCreatingTrip ? 'Guardando...' : (editingTripId ? 'Actualizar Viaje' : 'Crear Viaje') }}
+          </BaseButton>
         </div>
       </form>
     </BaseModal>
