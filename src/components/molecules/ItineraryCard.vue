@@ -4,8 +4,11 @@ defineProps({
 })
 // NUEVO: Le decimos a Vue que esta tarjeta puede emitir un evento
 // Añadimos 'edit-itinerary' y 'delete-itinerary' a la lista de eventos
-defineEmits(['add-flight', 'edit-itinerary', 'delete-itinerary'])
+// Asegúrate de tener los 5 eventos declarados aquí
+defineEmits(['add-flight', 'edit-itinerary', 'delete-itinerary', 'edit-flight', 'delete-flight'])
 // Función helper para poner las fechas bonitas (ej: "15 oct 2026, 15:30")
+
+
 const formatDate = (dateString) => {
   const options = { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit' }
   return new Date(dateString).toLocaleDateString('es-ES', options)
@@ -33,7 +36,7 @@ const formatDate = (dateString) => {
       <h4 class="text-sm font-bold text-slate-500 mb-4 uppercase tracking-wider">Tramos de Vuelo</h4>
       
       <div v-if="itinerary.flights && itinerary.flights.length > 0" class="space-y-4">
-        <div v-for="flight in itinerary.flights" :key="flight.id" class="flex items-center bg-slate-50 border border-slate-100 p-4 rounded-lg">
+        <div v-for="flight in itinerary.flights" :key="flight.id" class="flex items-center bg-slate-50 border border-slate-100 p-4 rounded-lg relative">
           
           <div class="w-1/4">
             <p class="font-bold text-slate-800">{{ flight.airline }}</p>
@@ -54,9 +57,13 @@ const formatDate = (dateString) => {
             <p class="text-xs text-slate-500">{{ formatDate(flight.arrivalTime) }}</p>
           </div>
 
+          <div class="absolute right-3 top-3 flex gap-3 bg-white px-2 py-1 rounded-md shadow-sm border border-slate-200">
+            <button @click="$emit('edit-flight', flight)" class="text-sm hover:scale-110 transition-transform" title="Editar Vuelo">✏️</button>
+            <button @click="$emit('delete-flight', flight.id)" class="text-sm hover:scale-110 transition-transform" title="Borrar Vuelo">🗑️</button>
+          </div>
+
         </div>
       </div>
-
       <div v-else class="text-center py-6 text-slate-500 text-sm italic">
         No hay vuelos añadidos a este itinerario todavía.
       </div>

@@ -23,6 +23,15 @@ const editingTripId = ref(null)
 const isFlightModalOpen = ref(false)
 const isCreatingFlight = ref(false)
 const selectedItineraryId = ref(null) // Para saber a qué viaje le estamos metiendo el vuelo
+const editingFlightId = ref(null) // <--- NUEVO
+
+
+// Función para formatear la fecha de la BD (ISO) al formato que exige el input (YYYY-MM-DDTHH:mm)
+const formatForInput = (dateString) => {
+  if (!dateString) return ''
+  return new Date(dateString).toISOString().slice(0, 16)
+}
+
 const newFlight = ref({
   origin: '', destination: '', departureTime: '', arrivalTime: '', airline: '', flightNumber: ''
 })
@@ -107,32 +116,46 @@ const deleteItinerary = async (id) => {
   }
 }
 
-// NUEVO: Funciones para el vuelo
-const openFlightModal = (itineraryId) => {
+// Abrir modal para CREAR
+const openCreateFlightModal = (itineraryId) => {
+  editingFlightId.value = null
   selectedItineraryId.value = itineraryId
+  newFlight.value = { origin: '', destination: '', departureTime: '', arrivalTime: '', airline: '', flightNumber: '' }
   isFlightModalOpen.value = true
 }
 
-const createNewFlight = async () => {
+// Abrir modal para EDITAR
+const openEditFlightModal = (flight) => {
+  editingFlightId.value = flight.id
+  selectedItineraryId.value = flight.itineraryId
+  // Rellenamos con los datos del vuelo, formateando las fechas para que el input las entienda
+  newFlight.value = { 
+    ...flight,
+    departureTime: formatForInput(flight.departureTime),
+    arrivalTime: formatForInput(flight.arrivalTime)
+  }
+  isFlightModalOpen.value = true
+}
+
+// Función Híbrida: CREAR o ACTUALIZAR
+const saveFlight = async () => {
   isCreatingFlight.value = true
+  const url = editingFlightId.value 
+    ? `http://localhost:3000/api/vuelos/${editingFlightId.value}`
+    : 'http://localhost:3000/api/vuelos'
+  const method = editingFlightId.value ? 'PUT' : 'POST'
+
   try {
-    const response = await fetch('http://localhost:3000/api/vuelos', {
-      method: 'POST',
+    const response = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...newFlight.value,
-        itineraryId: selectedItineraryId.value // Le pasamos el ID del viaje padre
-      })
+      body: JSON.stringify({ ...newFlight.value, itineraryId: selectedItineraryId.value })
     })
 
-    if (!response.ok) throw new Error('Error al añadir el vuelo')
-
-    // Limpiamos el formulario y cerramos el modal
-    newFlight.value = { origin: '', destination: '', departureTime: '', arrivalTime: '', airline: '', flightNumber: '' }
-    isFlightModalOpen.value = false
+    if (!response.ok) throw new Error('Error al guardar el vuelo')
     
-    // Recargamos los viajes para ver el nuevo vuelo en pantalla
-    fetchItineraries()
+    isFlightModalOpen.value = false
+    fetchItineraries() // Recargamos la lista
   } catch (error) {
     console.error(error)
   } finally {
@@ -140,6 +163,18 @@ const createNewFlight = async () => {
   }
 }
 
+// BORRAR Vuelo
+const deleteFlight = async (flightId) => {
+  if (!window.confirm('¿Eliminar este tramo de vuelo?')) return
+
+  try {
+    const response = await fetch(`http://localhost:3000/api/vuelos/${flightId}`, { method: 'DELETE' })
+    if (!response.ok) throw new Error('Error al borrar vuelo')
+    fetchItineraries()
+  } catch (error) {
+    console.error(error)
+  }
+}
 onMounted(() => fetchItineraries())
 </script>
 
@@ -166,8 +201,9 @@ onMounted(() => fetchItineraries())
           v-for="itinerary in itineraries" 
           :key="itinerary.id" 
           :itinerary="itinerary" 
-          @add-flight="openFlightModal" @edit-itinerary="openEditModal"    @delete-itinerary="deleteItinerary"
-        />
+          @add-flight="openCreateFlightModal" @edit-itinerary="openEditModal"
+          @delete-itinerary="deleteItinerary"
+          @edit-flight="openEditFlightModal" @delete-flight="deleteFlight"      />
       </div>
 
       <div v-else class="text-center py-16 bg-white rounded-xl border border-dashed border-slate-300">
@@ -194,8 +230,8 @@ onMounted(() => fetchItineraries())
       </form>
     </BaseModal>
 
-    <BaseModal :isOpen="isFlightModalOpen" title="Añadir Tramo de Vuelo" @close="isFlightModalOpen = false">
-      <form @submit.prevent="createNewFlight" class="space-y-4">
+    <BaseModal :isOpen="isFlightModalOpen" :title="editingFlightId ? 'Editar Tramo de Vuelo' : 'Añadir Tramo de Vuelo'" @close="isFlightModalOpen = false">
+      <form @submit.prevent="saveFlight" class="space-y-4">
         <div class="grid grid-cols-2 gap-4">
           <BaseInput v-model="newFlight.origin" label="Origen (IATA)" placeholder="Ej: MAD" required />
           <BaseInput v-model="newFlight.destination" label="Destino (IATA)" placeholder="Ej: JFK" required />
@@ -213,7 +249,9 @@ onMounted(() => fetchItineraries())
 
         <div class="flex justify-end gap-3 mt-6">
           <BaseButton type="button" variant="secondary" @click="isFlightModalOpen = false">Cancelar</BaseButton>
-          <BaseButton type="submit" :disabled="isCreatingFlight">{{ isCreatingFlight ? 'Guardando...' : 'Añadir Vuelo' }}</BaseButton>
+          <BaseButton type="submit" :disabled="isCreatingFlight">
+            {{ isCreatingFlight ? 'Guardando...' : (editingFlightId ? 'Actualizar Vuelo' : 'Añadir Vuelo') }}
+          </BaseButton>
         </div>
       </form>
     </BaseModal>
