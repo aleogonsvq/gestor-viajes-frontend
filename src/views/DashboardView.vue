@@ -6,6 +6,10 @@ import BaseInput from '../components/atoms/BaseInput.vue'
 import ClientCard from '../components/molecules/ClientCard.vue'
 import BaseModal from '../components/molecules/BaseModal.vue'
 
+// NUEVAS IMPORTACIONES
+import HeroHeader from '../components/organisms/HeroHeader.vue'
+import AppFooter from '../components/organisms/AppFooter.vue'
+
 // NUEVAS LIBRERÍAS UX
 import { useToast } from 'vue-toastification'
 import Swal from 'sweetalert2'
@@ -124,41 +128,34 @@ const deleteClient = async (id) => {
 
 onMounted(() => { fetchClients() })
 </script>
-<template>
-  <div class="min-h-screen bg-slate-50 flex flex-col relative">
-    
-    <header class="bg-white shadow-sm border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-10">
-      <div class="flex items-center gap-2">
-        <span class="text-2xl">✈️</span>
-        <h1 class="text-xl font-bold text-slate-800 hidden sm:block">Gestor Amadeus</h1>
-      </div>
-      <div class="flex items-center gap-4">
-        <span class="text-sm font-medium text-slate-600">Hola, {{ agenteName }}</span>
-        <BaseButton variant="secondary" @click="logout" class="text-sm py-1.5 px-3">Salir</BaseButton>
-      </div>
-    </header>
 
-    <main class="flex-grow max-w-7xl mx-auto w-full p-6 mt-4">
+<template>
+  <div class="min-h-screen bg-slate-50 flex flex-col relative font-sans">
+    
+    <HeroHeader 
+      :agentName="agenteName" 
+      title="Gestión de Viajeros Premium"
+      description="Administra los perfiles de tus clientes, diseña itinerarios inolvidables y mantén todo bajo control desde tu estudio virtual."
+      @logout="logout" 
+    />
+
+    <main class="flex-grow max-w-7xl mx-auto w-full p-6 mt-8 mb-12">
       
-      <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-8">
-        <div>
-          <h2 class="text-2xl font-bold text-slate-800">Mis Clientes</h2>
-          <p class="text-slate-500">Gestiona los perfiles y viajes de tus viajeros.</p>
+      <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-8 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+        
+        <div class="relative w-full md:w-96">
+          <span class="absolute inset-y-0 left-0 flex items-center pl-4 text-slate-400">🔍</span>
+          <input 
+            v-model="searchQuery" 
+            type="text" 
+            placeholder="Buscar viajero por nombre o correo..." 
+            class="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white focus:border-blue-500 outline-none transition-all"
+          >
         </div>
         
-        <div class="flex items-center gap-4 w-full md:w-auto">
-          <div class="relative w-full md:w-64">
-            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">🔍</span>
-            <input 
-              v-model="searchQuery" 
-              type="text" 
-              placeholder="Buscar por nombre o email..." 
-              class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-            >
-          </div>
-          
-          <BaseButton @click="openCreateModal" class="whitespace-nowrap">+ Nuevo Cliente</BaseButton>
-        </div>
+        <BaseButton @click="openCreateModal" class="w-full md:w-auto shadow-md">
+          + Añadir Nuevo Viajero
+        </BaseButton>
       </div>
 
       <div v-if="isLoading" class="text-center py-12">
@@ -175,13 +172,13 @@ onMounted(() => { fetchClients() })
         />
       </div>
 
-      <div v-else class="text-center py-16 bg-white rounded-xl border border-dashed border-slate-300">
-        <span class="text-4xl mb-3 block">{{ searchQuery ? '🕵️‍♂️' : '📭' }}</span>
-        <h3 class="text-lg font-bold text-slate-700">
-          {{ searchQuery ? 'No se encontraron clientes' : 'Aún no tienes clientes' }}
+      <div v-else class="text-center py-20 bg-white rounded-2xl shadow-sm border border-dashed border-slate-300">
+        <span class="text-5xl mb-4 block">{{ searchQuery ? '🕵️‍♂️' : '📭' }}</span>
+        <h3 class="text-xl font-bold text-slate-700 mb-2">
+          {{ searchQuery ? 'No hay coincidencias' : 'Tu cartera de clientes está vacía' }}
         </h3>
-        <p class="text-slate-500 mb-4">
-          {{ searchQuery ? `Nadie coincide con "${searchQuery}"` : 'Empieza añadiendo tu primer viajero.' }}
+        <p class="text-slate-500 mb-6 max-w-md mx-auto">
+          {{ searchQuery ? `Nadie coincide con la búsqueda "${searchQuery}". Revisa si lo has escrito bien.` : 'Destaca como agente añadiendo tu primer viajero y empezando a crearle itinerarios a medida.' }}
         </p>
         <BaseButton v-if="!searchQuery" @click="openCreateModal">Crear mi primer cliente</BaseButton>
         <BaseButton v-else variant="secondary" @click="searchQuery = ''">Limpiar búsqueda</BaseButton>
@@ -189,25 +186,10 @@ onMounted(() => { fetchClients() })
 
     </main>
 
-    <BaseModal 
-      :isOpen="isModalOpen" 
-      :title="editingId ? 'Editar Cliente' : 'Crear Nuevo Cliente'" 
-      @close="isModalOpen = false"
-    >
-      <form @submit.prevent="saveClient" class="space-y-4">
-        <BaseInput v-model="form.name" label="Nombre Completo" placeholder="Ej: Marta Viajera" required />
-        <BaseInput v-model="form.email" label="Correo Electrónico" type="email" placeholder="marta@ejemplo.com" required />
-        <BaseInput v-model="form.phone" label="Teléfono (Opcional)" placeholder="+34 600 000 000" />
-        <BaseInput v-model="form.notes" label="Notas Adicionales (Opcional)" placeholder="Ej: Alergias, preferencias..." />
-        
-        <div class="flex justify-end gap-3 mt-6">
-          <BaseButton type="button" variant="secondary" @click="isModalOpen = false">Cancelar</BaseButton>
-          <BaseButton type="submit" :disabled="isSaving">
-            {{ isSaving ? 'Guardando...' : (editingId ? 'Actualizar Perfil' : 'Crear Cliente') }}
-          </BaseButton>
-        </div>
-      </form>
-    </BaseModal>
+    <BaseModal :isOpen="isModalOpen" :title="editingId ? 'Editar Cliente' : 'Nuevo Cliente'" @close="isModalOpen = false">
+      </BaseModal>
+
+    <AppFooter />
 
   </div>
 </template>

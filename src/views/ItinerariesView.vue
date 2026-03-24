@@ -1,44 +1,71 @@
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+
+// Átomos y Moléculas
 import BaseButton from '../components/atoms/BaseButton.vue'
 import BaseInput from '../components/atoms/BaseInput.vue'
 import ItineraryCard from '../components/molecules/ItineraryCard.vue'
 import BaseModal from '../components/molecules/BaseModal.vue'
 
-// --- LIBRERÍAS DE UX ---
+// NUEVOS ORGANISMOS (Diseño Premium)
+import HeroHeader from '../components/organisms/HeroHeader.vue'
+import AppFooter from '../components/organisms/AppFooter.vue'
+
+// UX Premium
 import { useToast } from 'vue-toastification'
 import Swal from 'sweetalert2'
 
 const route = useRoute()
 const router = useRouter()
-
-// ¡ESTA ES LA LÍNEA QUE SEGURAMENTE FALTABA! Enciende los Toasts
-const toast = useToast() 
+const toast = useToast()
 
 const clientId = route.params.id
+
+// Datos de Sesión y Cliente
+const agenteName = ref(localStorage.getItem('agente_nombre') || 'Agente')
+const clientName = ref('Cargando viajero...') // Lo usaremos para el título gigante
+
 const itineraries = ref([])
 const isLoading = ref(true)
 
-// Modal Viaje
+// Variables Modales
 const isTripModalOpen = ref(false)
 const newTripName = ref('')
 const isCreatingTrip = ref(false)
 const editingTripId = ref(null)
 
-// Modal Vuelos
 const isFlightModalOpen = ref(false)
 const isCreatingFlight = ref(false)
 const selectedItineraryId = ref(null)
 const editingFlightId = ref(null)
 const newFlight = ref({ origin: '', destination: '', departureTime: '', arrivalTime: '', airline: '', flightNumber: '' })
 
-// Impresión PDF
 const printingTripId = ref(null)
 
+// --- NAVEGACIÓN ---
 const goBack = () => router.push('/dashboard')
 
+const logout = () => {
+  localStorage.clear()
+  router.push('/')
+}
+
 // --- API: OBTENER DATOS ---
+const fetchClientData = async () => {
+  try {
+    const response = await fetch(`http://localhost:3000/api/clientes/${clientId}`)
+    if (response.ok) {
+      const data = await response.json()
+      clientName.value = data.name
+    } else {
+      clientName.value = 'Viajero'
+    }
+  } catch (error) {
+    clientName.value = 'Viajero'
+  }
+}
+
 const fetchItineraries = async () => {
   try {
     const response = await fetch(`http://localhost:3000/api/itinerarios/cliente/${clientId}`)
@@ -67,7 +94,6 @@ const openEditModal = (itinerary) => {
 const saveItinerary = async () => {
   if (!newTripName.value.trim()) return 
   isCreatingTrip.value = true
-
   const url = editingTripId.value ? `http://localhost:3000/api/itinerarios/${editingTripId.value}` : 'http://localhost:3000/api/itinerarios'
   const method = editingTripId.value ? 'PUT' : 'POST'
 
@@ -77,15 +103,12 @@ const saveItinerary = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: newTripName.value, clientId: parseInt(clientId) })
     })
-    
     if (!response.ok) throw new Error('Error al guardar')
     
     newTripName.value = ''
     editingTripId.value = null
     isTripModalOpen.value = false
     fetchItineraries() 
-    
-    // Disparamos el Toast
     toast.success(editingTripId.value ? 'Viaje actualizado' : 'Nuevo viaje creado') 
   } catch (error) {
     toast.error("No se pudo guardar el viaje")
@@ -156,13 +179,10 @@ const saveFlight = async () => {
     }
 
     const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-
     if (!response.ok) throw new Error('Error al guardar el vuelo')
     
     isFlightModalOpen.value = false
     fetchItineraries()
-    
-    // Disparamos el Toast del vuelo
     toast.success(editingFlightId.value ? 'Vuelo actualizado' : 'Tramo de vuelo añadido')
   } catch (error) {
     toast.error("No se pudo guardar el vuelo")
@@ -184,7 +204,6 @@ const deleteFlight = async (flightId) => {
   })
 
   if (!result.isConfirmed) return
-
   try {
     const response = await fetch(`http://localhost:3000/api/vuelos/${flightId}`, { method: 'DELETE' })
     if (!response.ok) throw new Error('Error al borrar vuelo')
@@ -203,27 +222,35 @@ const printSingleItinerary = async (id) => {
   printingTripId.value = null
 }
 
-onMounted(() => fetchItineraries())
+onMounted(() => {
+  fetchClientData() // Obtenemos el nombre del cliente
+  fetchItineraries()
+})
 </script>
-<template>
-  <div class="min-h-screen bg-slate-50 flex flex-col relative">
-    
-    <header class="bg-white shadow-sm border-b border-slate-200 px-6 py-4 flex items-center gap-4 sticky top-0 z-10" print:hidden>
-      <BaseButton variant="secondary" @click="goBack" class="py-1 px-3 text-sm">← Volver</BaseButton>
-      <h1 class="text-xl font-bold text-slate-800">Itinerarios del Cliente</h1>
-    </header>
 
-    <main class="flex-grow max-w-4xl mx-auto w-full p-6 mt-4">
+<template>
+  <div class="min-h-screen bg-slate-50 flex flex-col relative font-sans">
+    
+    <HeroHeader 
+      :agentName="agenteName" 
+      :title="`Viajes de ${clientName}`"
+      description="Diseña, organiza y exporta en PDF todos los detalles de las aventuras de este viajero."
+      @logout="logout" 
+    />
+
+    <main class="flex-grow max-w-4xl mx-auto w-full p-6 mt-6 mb-12">
       
-      <div class="flex justify-between items-center mb-8" :class="{ 'print:hidden': printingTripId }">
-        <h2 class="text-2xl font-bold text-slate-800">Viajes Programados</h2>
-        <div class="print:hidden">
-          <BaseButton @click="openCreateModal">+ Nuevo Viaje</BaseButton>
-        </div>
+      <div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8 bg-white p-4 rounded-xl shadow-sm border border-slate-100" :class="{ 'print:hidden': printingTripId }">
+        <BaseButton variant="secondary" @click="goBack" class="shadow-sm w-full sm:w-auto text-slate-700 bg-slate-100 hover:bg-slate-200">
+          ← Volver al Panel
+        </BaseButton>
+        <BaseButton @click="openCreateModal" class="shadow-md w-full sm:w-auto">
+          + Nuevo Viaje
+        </BaseButton>
       </div>
 
       <div v-if="isLoading" class="text-center py-12">
-        <p class="text-slate-500 animate-pulse">Cargando itinerarios y vuelos...</p>
+        <p class="text-slate-500 animate-pulse">Cargando la hoja de ruta...</p>
       </div>
 
       <div v-else-if="itineraries.length > 0" class="space-y-6">
@@ -241,55 +268,45 @@ onMounted(() => fetchItineraries())
         />
       </div>
 
-      <div v-else class="text-center py-16 bg-white rounded-xl border border-dashed border-slate-300">
-        <span class="text-4xl mb-3 block">🏝️</span>
-        <h3 class="text-lg font-bold text-slate-700">Sin viajes a la vista</h3>
-        <p class="text-slate-500 mb-4">Este cliente aún no tiene ningún itinerario creado.</p>
-        <BaseButton @click="openCreateModal">Crear mi primer viaje</BaseButton>
+      <div v-else class="text-center py-16 bg-white rounded-2xl shadow-sm border border-dashed border-slate-300">
+        <span class="text-5xl mb-4 block">🗺️</span>
+        <h3 class="text-xl font-bold text-slate-700 mb-2">Lienzo en blanco</h3>
+        <p class="text-slate-500 mb-6 max-w-md mx-auto">
+          Aún no has diseñado ninguna ruta para este viajero. Haz clic en "Nuevo Viaje" para empezar a organizar su próxima aventura.
+        </p>
       </div>
     </main>
 
-    <BaseModal 
-      :isOpen="isTripModalOpen" 
-      :title="editingTripId ? 'Editar Viaje' : 'Crear Nuevo Viaje'" 
-      @close="isTripModalOpen = false"
-    >
+    <BaseModal :isOpen="isTripModalOpen" :title="editingTripId ? 'Editar Viaje' : 'Crear Nuevo Viaje'" @close="isTripModalOpen = false">
       <form @submit.prevent="saveItinerary" class="space-y-4">
-        <BaseInput v-model="newTripName" label="Nombre del Itinerario" required />
+        <BaseInput v-model="newTripName" label="Nombre del Itinerario" placeholder="Ej: Luna de Miel en Bali" required />
         <div class="flex justify-end gap-3 mt-6">
           <BaseButton type="button" variant="secondary" @click="isTripModalOpen = false">Cancelar</BaseButton>
-          <BaseButton type="submit" :disabled="isCreatingTrip">
-            {{ isCreatingTrip ? 'Guardando...' : (editingTripId ? 'Actualizar Viaje' : 'Crear Viaje') }}
-          </BaseButton>
+          <BaseButton type="submit" :disabled="isCreatingTrip">{{ isCreatingTrip ? 'Guardando...' : (editingTripId ? 'Actualizar Viaje' : 'Crear Viaje') }}</BaseButton>
         </div>
       </form>
     </BaseModal>
 
     <BaseModal :isOpen="isFlightModalOpen" :title="editingFlightId ? 'Editar Tramo de Vuelo' : 'Añadir Tramo de Vuelo'" @close="isFlightModalOpen = false">
       <form @submit.prevent="saveFlight" class="space-y-4">
+        <BaseInput v-model="newFlight.airline" label="Aerolínea" placeholder="Ej: Iberia" required />
+        <BaseInput v-model="newFlight.flightNumber" label="Número de Vuelo" placeholder="Ej: IB-3450" required />
         <div class="grid grid-cols-2 gap-4">
-          <BaseInput v-model="newFlight.origin" label="Origen (IATA)" placeholder="Ej: MAD" required />
-          <BaseInput v-model="newFlight.destination" label="Destino (IATA)" placeholder="Ej: JFK" required />
+          <BaseInput v-model="newFlight.origin" label="Origen (IATA)" placeholder="MAD" required />
+          <BaseInput v-model="newFlight.destination" label="Destino (IATA)" placeholder="JFK" required />
         </div>
-        
         <div class="grid grid-cols-2 gap-4">
-          <BaseInput v-model="newFlight.departureTime" type="datetime-local" label="Salida" required />
-          <BaseInput v-model="newFlight.arrivalTime" type="datetime-local" label="Llegada" required />
+          <BaseInput v-model="newFlight.departureTime" label="Salida" type="datetime-local" required />
+          <BaseInput v-model="newFlight.arrivalTime" label="Llegada" type="datetime-local" required />
         </div>
-
-        <div class="grid grid-cols-2 gap-4">
-          <BaseInput v-model="newFlight.airline" label="Aerolínea" placeholder="Ej: Iberia" required />
-          <BaseInput v-model="newFlight.flightNumber" label="Nº Vuelo" placeholder="Ej: IB6253" required />
-        </div>
-
         <div class="flex justify-end gap-3 mt-6">
           <BaseButton type="button" variant="secondary" @click="isFlightModalOpen = false">Cancelar</BaseButton>
-          <BaseButton type="submit" :disabled="isCreatingFlight">
-            {{ isCreatingFlight ? 'Guardando...' : (editingFlightId ? 'Actualizar Vuelo' : 'Añadir Vuelo') }}
-          </BaseButton>
+          <BaseButton type="submit" :disabled="isCreatingFlight">{{ isCreatingFlight ? 'Guardando...' : (editingFlightId ? 'Actualizar Vuelo' : 'Añadir Vuelo') }}</BaseButton>
         </div>
       </form>
     </BaseModal>
+
+    <AppFooter />
 
   </div>
 </template>
