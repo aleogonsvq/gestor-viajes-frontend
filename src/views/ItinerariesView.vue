@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BaseButton from '../components/atoms/BaseButton.vue'
 import BaseInput from '../components/atoms/BaseInput.vue'
@@ -25,6 +25,20 @@ const isCreatingFlight = ref(false)
 const selectedItineraryId = ref(null) // Para saber a qué viaje le estamos metiendo el vuelo
 const editingFlightId = ref(null) // <--- NUEVO
 
+
+// Variable para saber qué viaje aislar al imprimir
+const printingTripId = ref(null)
+
+// Función que aísla, imprime y restaura
+const printSingleItinerary = async (id) => {
+  printingTripId.value = id // Guardamos el ID del viaje elegido
+  
+  await nextTick() // Vue actualiza el HTML y oculta el resto de tarjetas mágicamente
+  
+  window.print() // Lanzamos el PDF
+  
+  printingTripId.value = null // Al terminar, restauramos la vista para que vuelva a aparecer todo
+}
 
 // Función para formatear la fecha de la BD (ISO) al formato que exige el input (YYYY-MM-DDTHH:mm)
 const formatForInput = (dateString) => {
@@ -181,15 +195,18 @@ onMounted(() => fetchItineraries())
 <template>
   <div class="min-h-screen bg-slate-50 flex flex-col relative">
     
-    <header class="bg-white shadow-sm border-b border-slate-200 px-6 py-4 flex items-center gap-4 sticky top-0 z-10">
+    <header class="bg-white shadow-sm border-b border-slate-200 px-6 py-4 flex items-center gap-4 sticky top-0 z-10" print:hidden>
       <BaseButton variant="secondary" @click="goBack" class="py-1 px-3 text-sm">← Volver</BaseButton>
       <h1 class="text-xl font-bold text-slate-800">Itinerarios del Cliente</h1>
     </header>
 
     <main class="flex-grow max-w-4xl mx-auto w-full p-6 mt-4">
-      <div class="flex justify-between items-center mb-8">
+      
+      <div class="flex justify-between items-center mb-8" :class="{ 'print:hidden': printingTripId }">
         <h2 class="text-2xl font-bold text-slate-800">Viajes Programados</h2>
-        <BaseButton @click="openCreateModal">+ Nuevo Viaje</BaseButton>
+        <div class="print:hidden">
+          <BaseButton @click="openCreateModal">+ Nuevo Viaje</BaseButton>
+        </div>
       </div>
 
       <div v-if="isLoading" class="text-center py-12">
@@ -201,9 +218,14 @@ onMounted(() => fetchItineraries())
           v-for="itinerary in itineraries" 
           :key="itinerary.id" 
           :itinerary="itinerary" 
-          @add-flight="openCreateFlightModal" @edit-itinerary="openEditModal"
+          :class="{ 'print:hidden': printingTripId !== null && printingTripId !== itinerary.id }"
+          @print-itinerary="printSingleItinerary"
+          @add-flight="openCreateFlightModal"
+          @edit-itinerary="openEditModal"
           @delete-itinerary="deleteItinerary"
-          @edit-flight="openEditFlightModal" @delete-flight="deleteFlight"      />
+          @edit-flight="openEditFlightModal"
+          @delete-flight="deleteFlight"
+        />
       </div>
 
       <div v-else class="text-center py-16 bg-white rounded-xl border border-dashed border-slate-300">
