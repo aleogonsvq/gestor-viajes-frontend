@@ -6,10 +6,17 @@ import BaseInput from '../components/atoms/BaseInput.vue'
 import ItineraryCard from '../components/molecules/ItineraryCard.vue'
 import BaseModal from '../components/molecules/BaseModal.vue'
 
+// --- LIBRERÍAS DE UX ---
+import { useToast } from 'vue-toastification'
+import Swal from 'sweetalert2'
+
 const route = useRoute()
 const router = useRouter()
-const clientId = route.params.id
 
+// ¡ESTA ES LA LÍNEA QUE SEGURAMENTE FALTABA! Enciende los Toasts
+const toast = useToast() 
+
+const clientId = route.params.id
 const itineraries = ref([])
 const isLoading = ref(true)
 
@@ -19,118 +26,105 @@ const newTripName = ref('')
 const isCreatingTrip = ref(false)
 const editingTripId = ref(null)
 
-// NUEVO: Variables para el Modal de Vuelos
+// Modal Vuelos
 const isFlightModalOpen = ref(false)
 const isCreatingFlight = ref(false)
-const selectedItineraryId = ref(null) // Para saber a qué viaje le estamos metiendo el vuelo
-const editingFlightId = ref(null) // <--- NUEVO
+const selectedItineraryId = ref(null)
+const editingFlightId = ref(null)
+const newFlight = ref({ origin: '', destination: '', departureTime: '', arrivalTime: '', airline: '', flightNumber: '' })
 
-
-// Variable para saber qué viaje aislar al imprimir
+// Impresión PDF
 const printingTripId = ref(null)
-
-// Función que aísla, imprime y restaura
-const printSingleItinerary = async (id) => {
-  printingTripId.value = id // Guardamos el ID del viaje elegido
-  
-  await nextTick() // Vue actualiza el HTML y oculta el resto de tarjetas mágicamente
-  
-  window.print() // Lanzamos el PDF
-  
-  printingTripId.value = null // Al terminar, restauramos la vista para que vuelva a aparecer todo
-}
-
-// Función para formatear la fecha de la BD (ISO) al formato que exige el input (YYYY-MM-DDTHH:mm)
-const formatForInput = (dateString) => {
-  if (!dateString) return ''
-  return new Date(dateString).toISOString().slice(0, 16)
-}
-
-const newFlight = ref({
-  origin: '', destination: '', departureTime: '', arrivalTime: '', airline: '', flightNumber: ''
-})
 
 const goBack = () => router.push('/dashboard')
 
+// --- API: OBTENER DATOS ---
 const fetchItineraries = async () => {
   try {
     const response = await fetch(`http://localhost:3000/api/itinerarios/cliente/${clientId}`)
     if (!response.ok) throw new Error('Error al obtener itinerarios')
     itineraries.value = await response.json()
   } catch (error) {
-    console.error("Error:", error)
+    toast.error("Error al cargar los viajes")
   } finally {
     isLoading.value = false
   }
 }
 
-// Función inteligente: Crea o Actualiza dependiendo de si hay un ID guardado
-const saveItinerary = async () => {
-  if (!newTripName.value.trim()) return 
-  isCreatingTrip.value = true
-
-  // Si tenemos un ID, la URL es la de edición (PUT), si no, la de creación (POST)
-  const url = editingTripId.value 
-    ? `http://localhost:3000/api/itinerarios/${editingTripId.value}`
-    : 'http://localhost:3000/api/itinerarios'
-    
-  const method = editingTripId.value ? 'PUT' : 'POST'
-
-  try {
-    const response = await fetch(url, {
-      method: method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newTripName.value, clientId: clientId })
-    })
-    
-    if (!response.ok) throw new Error('Error al guardar el viaje')
-    
-    // Limpieza
-    newTripName.value = ''
-    editingTripId.value = null
-    isTripModalOpen.value = false
-    fetchItineraries() // Recargamos la lista
-  } catch (error) {
-    console.error(error)
-  } finally {
-    isCreatingTrip.value = false
-  }
-}
-
-// Función para abrir el modal en modo Edición
-const openEditModal = (itinerary) => {
-  editingTripId.value = itinerary.id
-  newTripName.value = itinerary.name // Rellenamos el input con el nombre actual
-  isTripModalOpen.value = true
-}
-
-// Función para abrir el modal en modo Creación (limpia todo por si acaso)
+// --- CRUD: VIAJES ---
 const openCreateModal = () => {
   editingTripId.value = null
   newTripName.value = ''
   isTripModalOpen.value = true
 }
 
-// Función para Eliminar un viaje
-const deleteItinerary = async (id) => {
-  // Pedimos confirmación antes de borrar (buena práctica UX)
-  if (!window.confirm('¿Estás seguro de que quieres borrar este viaje y todos sus vuelos? Esta acción no se puede deshacer.')) {
-    return
-  }
+const openEditModal = (itinerary) => {
+  editingTripId.value = itinerary.id
+  newTripName.value = itinerary.name
+  isTripModalOpen.value = true
+}
+
+const saveItinerary = async () => {
+  if (!newTripName.value.trim()) return 
+  isCreatingTrip.value = true
+
+  const url = editingTripId.value ? `http://localhost:3000/api/itinerarios/${editingTripId.value}` : 'http://localhost:3000/api/itinerarios'
+  const method = editingTripId.value ? 'PUT' : 'POST'
 
   try {
-    const response = await fetch(`http://localhost:3000/api/itinerarios/${id}`, {
-      method: 'DELETE'
+    const response = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newTripName.value, clientId: parseInt(clientId) })
     })
     
-    if (!response.ok) throw new Error('Error al borrar')
-    fetchItineraries() // Recargamos la lista tras borrar
+    if (!response.ok) throw new Error('Error al guardar')
+    
+    newTripName.value = ''
+    editingTripId.value = null
+    isTripModalOpen.value = false
+    fetchItineraries() 
+    
+    // Disparamos el Toast
+    toast.success(editingTripId.value ? 'Viaje actualizado' : 'Nuevo viaje creado') 
   } catch (error) {
-    console.error("Error al borrar:", error)
+    toast.error("No se pudo guardar el viaje")
+  } finally {
+    isCreatingTrip.value = false
   }
 }
 
-// Abrir modal para CREAR
+const deleteItinerary = async (id) => {
+  const result = await Swal.fire({
+    title: '¿Eliminar este viaje?',
+    text: "Se borrarán también todos sus vuelos.",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: 'Sí, borrar',
+    cancelButtonText: 'Cancelar',
+    reverseButtons: true
+  })
+
+  if (!result.isConfirmed) return
+
+  try {
+    const response = await fetch(`http://localhost:3000/api/itinerarios/${id}`, { method: 'DELETE' })
+    if (!response.ok) throw new Error('Error al borrar')
+    fetchItineraries()
+    toast.info("Viaje eliminado correctamente")
+  } catch (error) {
+    toast.error("Hubo un problema al eliminar")
+  }
+}
+
+// --- CRUD: VUELOS ---
+const formatForInput = (dateString) => {
+  if (!dateString) return ''
+  return new Date(dateString).toISOString().slice(0, 16)
+}
+
 const openCreateFlightModal = (itineraryId) => {
   editingFlightId.value = null
   selectedItineraryId.value = itineraryId
@@ -138,60 +132,79 @@ const openCreateFlightModal = (itineraryId) => {
   isFlightModalOpen.value = true
 }
 
-// Abrir modal para EDITAR
 const openEditFlightModal = (flight) => {
   editingFlightId.value = flight.id
   selectedItineraryId.value = flight.itineraryId
-  // Rellenamos con los datos del vuelo, formateando las fechas para que el input las entienda
-  newFlight.value = { 
-    ...flight,
-    departureTime: formatForInput(flight.departureTime),
-    arrivalTime: formatForInput(flight.arrivalTime)
-  }
+  newFlight.value = { ...flight, departureTime: formatForInput(flight.departureTime), arrivalTime: formatForInput(flight.arrivalTime) }
   isFlightModalOpen.value = true
 }
 
-// Función Híbrida: CREAR o ACTUALIZAR
 const saveFlight = async () => {
   isCreatingFlight.value = true
-  const url = editingFlightId.value 
-    ? `http://localhost:3000/api/vuelos/${editingFlightId.value}`
-    : 'http://localhost:3000/api/vuelos'
+  const url = editingFlightId.value ? `http://localhost:3000/api/vuelos/${editingFlightId.value}` : 'http://localhost:3000/api/vuelos'
   const method = editingFlightId.value ? 'PUT' : 'POST'
 
   try {
-    const response = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...newFlight.value, itineraryId: selectedItineraryId.value })
-    })
+    const payload = {
+      origin: newFlight.value.origin,
+      destination: newFlight.value.destination,
+      departureTime: newFlight.value.departureTime,
+      arrivalTime: newFlight.value.arrivalTime,
+      airline: newFlight.value.airline,
+      flightNumber: newFlight.value.flightNumber,
+      itineraryId: selectedItineraryId.value
+    }
+
+    const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
 
     if (!response.ok) throw new Error('Error al guardar el vuelo')
     
     isFlightModalOpen.value = false
-    fetchItineraries() // Recargamos la lista
+    fetchItineraries()
+    
+    // Disparamos el Toast del vuelo
+    toast.success(editingFlightId.value ? 'Vuelo actualizado' : 'Tramo de vuelo añadido')
   } catch (error) {
-    console.error(error)
+    toast.error("No se pudo guardar el vuelo")
   } finally {
     isCreatingFlight.value = false
   }
 }
 
-// BORRAR Vuelo
 const deleteFlight = async (flightId) => {
-  if (!window.confirm('¿Eliminar este tramo de vuelo?')) return
+  const result = await Swal.fire({
+    title: '¿Quitar este vuelo?',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: 'Sí, quitar',
+    cancelButtonText: 'Cancelar',
+    reverseButtons: true
+  })
+
+  if (!result.isConfirmed) return
 
   try {
     const response = await fetch(`http://localhost:3000/api/vuelos/${flightId}`, { method: 'DELETE' })
     if (!response.ok) throw new Error('Error al borrar vuelo')
     fetchItineraries()
+    toast.info("Tramo de vuelo eliminado")
   } catch (error) {
-    console.error(error)
+    toast.error("No se pudo eliminar el vuelo")
   }
 }
+
+// --- UTILIDADES ---
+const printSingleItinerary = async (id) => {
+  printingTripId.value = id
+  await nextTick()
+  window.print()
+  printingTripId.value = null
+}
+
 onMounted(() => fetchItineraries())
 </script>
-
 <template>
   <div class="min-h-screen bg-slate-50 flex flex-col relative">
     

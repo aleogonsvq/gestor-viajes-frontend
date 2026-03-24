@@ -1,27 +1,41 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue' // <--- Añadimos computed
 import { useRouter } from 'vue-router'
 import BaseButton from '../components/atoms/BaseButton.vue'
 import BaseInput from '../components/atoms/BaseInput.vue'
 import ClientCard from '../components/molecules/ClientCard.vue'
 import BaseModal from '../components/molecules/BaseModal.vue'
 
+// NUEVAS LIBRERÍAS UX
+import { useToast } from 'vue-toastification'
+import Swal from 'sweetalert2'
+
 const router = useRouter()
-// Recuperamos tus datos de sesión
+const toast = useToast() // <--- Instanciamos los Toasts
+
 const agenteName = ref(localStorage.getItem('agente_nombre') || 'Agente')
 const agenteId = localStorage.getItem('agente_id')
 
-// Estado de la Lista de Clientes
 const clients = ref([])
 const isLoading = ref(true)
 
-// Estado del Modal de Clientes
+// --- NUEVO: LÓGICA DEL BUSCADOR ---
+const searchQuery = ref('') // Lo que el usuario escribe
+// Computed property: Filtra la lista en tiempo real sin tocar la base de datos original
+const filteredClients = computed(() => {
+  if (!searchQuery.value) return clients.value
+  
+  const query = searchQuery.value.toLowerCase()
+  return clients.value.filter(client => 
+    client.name.toLowerCase().includes(query) || 
+    client.email.toLowerCase().includes(query)
+  )
+})
+
 const isModalOpen = ref(false)
 const isSaving = ref(false)
-const editingId = ref(null) // Si es null, estamos creando. Si tiene un número, estamos editando.
+const editingId = ref(null)
 const form = ref({ name: '', email: '', phone: '', notes: '' })
-
-// --- FUNCIONES DE LECTURA Y SESIÓN ---
 
 const fetchClients = async () => {
   isLoading.value = true
@@ -30,7 +44,7 @@ const fetchClients = async () => {
     if (!response.ok) throw new Error('Error al obtener clientes')
     clients.value = await response.json()
   } catch (error) {
-    console.error("Error:", error)
+    toast.error("Error de conexión con el servidor") // <--- Toast de error
   } finally {
     isLoading.value = false
   }
@@ -41,84 +55,75 @@ const logout = () => {
   router.push('/')
 }
 
-// --- FUNCIONES DEL CRUD (CREAR, EDITAR, BORRAR) ---
-
-// Prepara el modal para CREAR
 const openCreateModal = () => {
   editingId.value = null
-  form.value = { name: '', email: '', phone: '', notes: '' } // Limpiamos campos
+  form.value = { name: '', email: '', phone: '', notes: '' }
   isModalOpen.value = true
 }
 
-// Prepara el modal para EDITAR
 const openEditModal = (clientData) => {
   editingId.value = clientData.id
-  form.value = { 
-    name: clientData.name, 
-    email: clientData.email, 
-    phone: clientData.phone || '', 
-    notes: clientData.notes || '' 
-  }
+  form.value = { name: clientData.name, email: clientData.email, phone: clientData.phone || '', notes: clientData.notes || '' }
   isModalOpen.value = true
 }
 
-// Función Híbrida: Guarda un cliente nuevo (POST) o actualiza uno existente (PUT)
 const saveClient = async () => {
   isSaving.value = true
-  
-  const url = editingId.value 
-    ? `http://localhost:3000/api/clientes/${editingId.value}`
-    : 'http://localhost:3000/api/clientes'
-    
+  const url = editingId.value ? `http://localhost:3000/api/clientes/${editingId.value}` : 'http://localhost:3000/api/clientes'
   const method = editingId.value ? 'PUT' : 'POST'
 
   try {
-    const payload = {
-      name: form.value.name,
-      email: form.value.email,
-      phone: form.value.phone,
-      notes: form.value.notes,
-      agentId: parseInt(agenteId) // Vital para asociarlo a ti
-    }
-
     const response = await fetch(url, {
       method: method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ ...form.value, agentId: parseInt(agenteId) })
     })
 
     if (!response.ok) throw new Error('Error guardando en el servidor')
     
-    isModalOpen.value = false // Cerramos el modal
-    fetchClients() // Recargamos la lista actualizada
+    isModalOpen.value = false
+    fetchClients() 
+    
+    // <--- TOAST DE ÉXITO ESTILO PREMIUM --->
+    toast.success(editingId.value ? 'Perfil actualizado' : 'Cliente creado con éxito')
+    
   } catch (error) {
-    console.error(error)
-    alert("Error al guardar: " + error.message)
+    toast.error("No se pudo guardar el cliente") // <--- Toast de error
   } finally {
     isSaving.value = false
   }
 }
 
-// Función para ELIMINAR
 const deleteClient = async (id) => {
-  if (!window.confirm('¿Borrar este cliente y TODOS sus viajes de forma permanente?')) return
+  // <--- NUEVO: SWEETALERT2 EN VEZ DEL FEO WINDOW.CONFIRM --->
+  const result = await Swal.fire({
+    title: '¿Eliminar este cliente?',
+    text: "Se borrarán también todos sus viajes. ¡Esta acción no se puede deshacer!",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#ef4444', // Rojo de Tailwind
+    cancelButtonColor: '#64748b', // Gris de Tailwind
+    confirmButtonText: 'Sí, eliminar',
+    cancelButtonText: 'Cancelar',
+    reverseButtons: true // Pone el botón de cancelar a la izquierda (mejor UX)
+  })
+
+  // Si el usuario le da a "Cancelar", detenemos la función aquí
+  if (!result.isConfirmed) return
 
   try {
     const response = await fetch(`http://localhost:3000/api/clientes/${id}`, { method: 'DELETE' })
     if (!response.ok) throw new Error('Error al borrar')
-    fetchClients() // Recargamos la lista tras borrar
+    
+    fetchClients()
+    toast.info("Cliente eliminado del sistema") // <--- Toast informativo
   } catch (error) {
-    console.error(error)
-    alert("Error al borrar el cliente")
+    toast.error("No se pudo eliminar el cliente")
   }
 }
 
-// Cargar los clientes nada más entrar a la página
-onMounted(() => {
-  fetchClients()
-})
+onMounted(() => { fetchClients() })
 </script>
-
 <template>
   <div class="min-h-screen bg-slate-50 flex flex-col relative">
     
@@ -135,21 +140,34 @@ onMounted(() => {
 
     <main class="flex-grow max-w-7xl mx-auto w-full p-6 mt-4">
       
-      <div class="flex justify-between items-end mb-8">
+      <div class="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-8">
         <div>
           <h2 class="text-2xl font-bold text-slate-800">Mis Clientes</h2>
           <p class="text-slate-500">Gestiona los perfiles y viajes de tus viajeros.</p>
         </div>
-        <BaseButton @click="openCreateModal">+ Nuevo Cliente</BaseButton>
+        
+        <div class="flex items-center gap-4 w-full md:w-auto">
+          <div class="relative w-full md:w-64">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">🔍</span>
+            <input 
+              v-model="searchQuery" 
+              type="text" 
+              placeholder="Buscar por nombre o email..." 
+              class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+            >
+          </div>
+          
+          <BaseButton @click="openCreateModal" class="whitespace-nowrap">+ Nuevo Cliente</BaseButton>
+        </div>
       </div>
 
       <div v-if="isLoading" class="text-center py-12">
         <p class="text-slate-500 animate-pulse">Cargando clientes desde la base de datos...</p>
       </div>
 
-      <div v-else-if="clients.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div v-else-if="filteredClients.length > 0" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <ClientCard 
-          v-for="client in clients" 
+          v-for="client in filteredClients" 
           :key="client.id" 
           :client="client" 
           @edit-client="openEditModal"
@@ -158,10 +176,15 @@ onMounted(() => {
       </div>
 
       <div v-else class="text-center py-16 bg-white rounded-xl border border-dashed border-slate-300">
-        <span class="text-4xl mb-3 block">📭</span>
-        <h3 class="text-lg font-bold text-slate-700">Aún no tienes clientes</h3>
-        <p class="text-slate-500 mb-4">Empieza añadiendo tu primer viajero para crearle itinerarios.</p>
-        <BaseButton @click="openCreateModal">Crear mi primer cliente</BaseButton>
+        <span class="text-4xl mb-3 block">{{ searchQuery ? '🕵️‍♂️' : '📭' }}</span>
+        <h3 class="text-lg font-bold text-slate-700">
+          {{ searchQuery ? 'No se encontraron clientes' : 'Aún no tienes clientes' }}
+        </h3>
+        <p class="text-slate-500 mb-4">
+          {{ searchQuery ? `Nadie coincide con "${searchQuery}"` : 'Empieza añadiendo tu primer viajero.' }}
+        </p>
+        <BaseButton v-if="!searchQuery" @click="openCreateModal">Crear mi primer cliente</BaseButton>
+        <BaseButton v-else variant="secondary" @click="searchQuery = ''">Limpiar búsqueda</BaseButton>
       </div>
 
     </main>
