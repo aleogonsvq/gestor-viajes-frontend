@@ -2,19 +2,18 @@
 import { useRouter } from 'vue-router'
 import BaseButton from '../atoms/BaseButton.vue'
 
-// ¡ESTA ES LA LÍNEA CLAVE QUE FALTABA O ESTABA INCOMPLETA!
-// Guardamos las propiedades en la variable "props" para poder usarlas en nuestras funciones
+// 1. Recibimos los datos del cliente
 const props = defineProps({
-  client: {
-    type: Object,
-    required: true
-  }
+  client: { type: Object, required: true }
 })
+
+// 2. Definimos qué "gritos" (eventos) puede dar esta tarjeta hacia el Dashboard
+defineEmits(['edit-client', 'delete-client'])
 
 const router = useRouter()
 
+// 3. Función de navegación a sus viajes
 const verItinerarios = () => {
-  // Ahora JavaScript sí sabe qué es "props"
   router.push(`/cliente/${props.client.id}/itinerarios`)
 }
 </script>
@@ -22,14 +21,23 @@ const verItinerarios = () => {
 <template>
   <div class="bg-white border border-slate-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow duration-300 flex flex-col h-full">
     
-    <div class="flex items-center gap-3 mb-4">
-      <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg">
-        {{ client.name.charAt(0).toUpperCase() }}
+    <div class="flex justify-between items-start mb-4">
+      
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg shrink-0">
+          {{ client.name.charAt(0).toUpperCase() }}
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-slate-800 leading-tight">{{ client.name }}</h3>
+          <p class="text-sm text-slate-500">{{ client.email }}</p>
+        </div>
       </div>
-      <div>
-        <h3 class="text-lg font-bold text-slate-800 leading-tight">{{ client.name }}</h3>
-        <p class="text-sm text-slate-500">{{ client.email }}</p>
+
+      <div class="flex gap-2 shrink-0">
+        <button @click="$emit('edit-client', client)" class="text-sm hover:scale-110 transition-transform" title="Editar Cliente">✏️</button>
+        <button @click="$emit('delete-client', client.id)" class="text-sm hover:scale-110 transition-transform text-red-500 hover:text-red-700" title="Borrar Cliente">🗑️</button>
       </div>
+
     </div>
 
     <div class="flex-grow space-y-2 mb-6">
